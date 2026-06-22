@@ -1,0 +1,39 @@
+{
+  "name": "@lichao2014/openclaw-acp",
+  "version": "0.1.0",
+  "description": "ACP adapter for OpenClaw via Gateway",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/cli.js",
+  "bin": {
+    "openclaw-acp": "dist/cli.mjs"
+  },
+  "scripts": {
+    "prepublishOnly": "npm run build",
+    "build": "tsc -p tsconfig.json && node scripts/create-mjs-entry.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "keywords": [
+    "acp",
+    "agent-client-protocol",
+    "openclaw",
+    "gateway",
+    "cli"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.30",
+    "typescript": "^5.8.3"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ]
+}
