@@ -227,7 +227,7 @@ export class OpenClawAcpBridge {
       agentInfo: {
         name: "openclaw-acp",
         title: "OpenClaw ACP Gateway",
-        version: "0.1.0"
+        version: "0.1.1"
       },
       authMethods: [],
       _meta: {
@@ -337,6 +337,7 @@ export class OpenClawAcpBridge {
     session.activeRunId = runId;
 
     try {
+      await this.enableFullToolVerbosity(session);
       await this.gateway.request(
         "chat.send",
         {
@@ -360,6 +361,13 @@ export class OpenClawAcpBridge {
     } finally {
       unsubscribeSessionMessages();
     }
+  }
+
+  private async enableFullToolVerbosity(session: SessionState): Promise<void> {
+    await this.gateway.request("sessions.patch", {
+      key: session.sessionKey,
+      verboseLevel: "full"
+    });
   }
 
   private async cancel(params: unknown): Promise<Record<string, never>> {

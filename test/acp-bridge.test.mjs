@@ -139,6 +139,21 @@ function createBridge() {
   return { bridge, gateway, notifications };
 }
 
+async function waitForGatewayRequest(gateway, predicate) {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const request = gateway.requests.find(predicate);
+    if (request) {
+      return request;
+    }
+    await Promise.resolve();
+  }
+  return undefined;
+}
+
+async function waitForGatewayMethod(gateway, method) {
+  return waitForGatewayRequest(gateway, (request) => request.method === method);
+}
+
 test("OpenClawAcpBridge initializes as openclaw-acp with session/list support", async () => {
   const { bridge } = createBridge();
 
@@ -155,6 +170,7 @@ test("OpenClawAcpBridge initializes as openclaw-acp with session/list support", 
   assert.equal(response.id, 1);
   assert.equal(response.result.protocolVersion, 1);
   assert.equal(response.result.agentInfo.name, "openclaw-acp");
+  assert.equal(response.result.agentInfo.version, "0.1.1");
   assert.equal(response.result.agentCapabilities.loadSession, true);
   assert.deepEqual(response.result.agentCapabilities.sessionCapabilities.list, {});
   assert.deepEqual(response.result._meta.controls, [
@@ -376,7 +392,7 @@ test("OpenClawAcpBridge sends prompts through chat.send and resolves on matching
     }
   });
 
-  const chatRequest = gateway.requests.find((request) => request.method === "chat.send");
+  const chatRequest = await waitForGatewayMethod(gateway, "chat.send");
   assert.ok(chatRequest);
   assert.equal(chatRequest.params.sessionKey, `acp:${sessionId}`);
   assert.ok(
@@ -440,6 +456,69 @@ test("OpenClawAcpBridge sends prompts through chat.send and resolves on matching
   assert.deepEqual(textChunks, ["hello", " there"]);
 });
 
+test("OpenClawAcpBridge enables full tool verbosity before sending prompts", async () => {
+  const { bridge, gateway } = createBridge();
+
+  const newSession = await bridge.handleJsonRpcRequest({
+    jsonrpc: "2.0",
+    id: 1,
+    method: "session/new",
+    params: {
+      cwd: "fixture-workspace/project"
+    }
+  });
+  const sessionId = newSession.result.sessionId;
+  gateway.requests.length = 0;
+
+  const promptPromise = bridge.handleJsonRpcRequest({
+    jsonrpc: "2.0",
+    id: 2,
+    method: "session/prompt",
+    params: {
+      sessionId,
+      prompt: [
+        {
+          type: "text",
+          text: "hello"
+        }
+      ]
+    }
+  });
+
+  const verbosityPatchIndex = gateway.requests.findIndex((request) =>
+    request.method === "sessions.patch" &&
+    request.params.key === `acp:${sessionId}` &&
+    request.params.verboseLevel === "full"
+  );
+  await waitForGatewayMethod(gateway, "chat.send");
+  const chatSendIndex = gateway.requests.findIndex((request) => request.method === "chat.send");
+  assert.notEqual(verbosityPatchIndex, -1);
+  assert.notEqual(chatSendIndex, -1);
+  assert.ok(verbosityPatchIndex < chatSendIndex);
+
+  const chatRequest = gateway.requests[chatSendIndex];
+  gateway.emit({
+    type: "event",
+    event: "chat",
+    payload: {
+      sessionKey: chatRequest.params.sessionKey,
+      runId: chatRequest.params.idempotencyKey,
+      state: "final",
+      message: {
+        role: "assistant",
+        content: [
+          {
+            type: "text",
+            text: "OK"
+          }
+        ]
+      }
+    }
+  });
+
+  await promptPromise;
+});
+
 test("OpenClawAcpBridge sends usage_update when final chat message includes usage", async () => {
   const { bridge, gateway, notifications } = createBridge();
 
@@ -469,7 +548,7 @@ test("OpenClawAcpBridge sends usage_update when final chat message includes usag
     }
   });
 
-  const chatRequest = gateway.requests.find((request) => request.method === "chat.send");
+  const chatRequest = await waitForGatewayMethod(gateway, "chat.send");
   assert.ok(chatRequest);
 
   gateway.emit({
@@ -549,7 +628,7 @@ test("OpenClawAcpBridge sends usage_update when final chat event includes top-le
     }
   });
 
-  const chatRequest = gateway.requests.find((request) => request.method === "chat.send");
+  const chatRequest = await waitForGatewayMethod(gateway, "chat.send");
   assert.ok(chatRequest);
 
   gateway.emit({
@@ -622,7 +701,7 @@ test("OpenClawAcpBridge sends usage_update from session store when final chat ev
     }
   });
 
-  const chatRequest = gateway.requests.find((request) => request.method === "chat.send");
+  const chatRequest = await waitForGatewayMethod(gateway, "chat.send");
   assert.ok(chatRequest);
 
   gateway.emit({
@@ -698,7 +777,7 @@ test("OpenClawAcpBridge sends usage_update from live sessions.changed usage with
     }
   });
 
-  const chatRequest = gateway.requests.find((request) => request.method === "chat.send");
+  const chatRequest = await waitForGatewayMethod(gateway, "chat.send");
   assert.ok(chatRequest);
 
   const subscribeRequest = gateway.requests.find((request) => request.method === "sessions.subscribe");
@@ -800,7 +879,7 @@ test("OpenClawAcpBridge sends usage_update from live session.message usage witho
     }
   });
 
-  const chatRequest = gateway.requests.find((request) => request.method === "chat.send");
+  const chatRequest = await waitForGatewayMethod(gateway, "chat.send");
   assert.ok(chatRequest);
 
   const messageSubscribeRequest = gateway.requests.find((request) =>
@@ -1043,7 +1122,7 @@ test("OpenClawAcpBridge falls back to generated ACP session keys when Gateway ca
     }
   });
 
-  const chatRequest = gateway.requests.find((request) => request.method === "chat.send");
+  const chatRequest = await waitForGatewayMethod(gateway, "chat.send");
   assert.ok(chatRequest);
   assert.equal(chatRequest.params.sessionKey, `acp:${sessionId}`);
 
@@ -1091,7 +1170,7 @@ test("OpenClawAcpBridge matches Gateway-normalized session keys in chat events",
     }
   });
 
-  const chatRequest = gateway.requests.find((request) => request.method === "chat.send");
+  const chatRequest = await waitForGatewayMethod(gateway, "chat.send");
   assert.ok(chatRequest);
   gateway.emit({
     type: "event",
