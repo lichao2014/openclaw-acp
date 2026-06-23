@@ -1,13 +1,16 @@
 ﻿import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { parseCliArgs } from "../dist/cli.js";
+import {
+  parseCliArgs,
+  resolveGatewayProtocolAdapters
+} from "../dist/cli.js";
 
-test("parseCliArgs defaults to the v3 gateway protocol", () => {
+test("parseCliArgs defaults to auto gateway protocol selection", () => {
   const parsed = parseCliArgs([]);
 
   assert.deepEqual(parsed, {
-    gatewayProtocol: "v3"
+    gatewayProtocol: "auto"
   });
 });
 
@@ -16,7 +19,7 @@ test("parseCliArgs accepts --config_path with a following directory", () => {
 
   assert.deepEqual(parsed, {
     configPath: "fixture-openclaw-state",
-    gatewayProtocol: "v3"
+    gatewayProtocol: "auto"
   });
 });
 
@@ -25,7 +28,16 @@ test("parseCliArgs accepts --config_path=<dir>", () => {
 
   assert.deepEqual(parsed, {
     configPath: "fixture-openclaw-state-inline",
-    gatewayProtocol: "v3"
+    gatewayProtocol: "auto"
+  });
+});
+
+test("parseCliArgs accepts --config-path with a following directory", () => {
+  const parsed = parseCliArgs(["--config-path", "fixture-openclaw-state"]);
+
+  assert.deepEqual(parsed, {
+    configPath: "fixture-openclaw-state",
+    gatewayProtocol: "auto"
   });
 });
 
@@ -45,6 +57,22 @@ test("parseCliArgs accepts --gateway_protocol v4", () => {
   });
 });
 
+test("parseCliArgs accepts --gateway-protocol auto", () => {
+  const parsed = parseCliArgs(["--gateway-protocol", "auto"]);
+
+  assert.deepEqual(parsed, {
+    gatewayProtocol: "auto"
+  });
+});
+
+test("parseCliArgs accepts --gateway-protocol=<version>", () => {
+  const parsed = parseCliArgs(["--gateway-protocol=v4"]);
+
+  assert.deepEqual(parsed, {
+    gatewayProtocol: "v4"
+  });
+});
+
 test("parseCliArgs accepts --url and --token", () => {
   const parsed = parseCliArgs([
     "--url",
@@ -54,7 +82,7 @@ test("parseCliArgs accepts --url and --token", () => {
   ]);
 
   assert.deepEqual(parsed, {
-    gatewayProtocol: "v3",
+    gatewayProtocol: "auto",
     url: "ws://127.0.0.1:19001",
     token: "fixture-value-1"
   });
@@ -67,7 +95,7 @@ test("parseCliArgs accepts --url=<url> and --token=<token>", () => {
   ]);
 
   assert.deepEqual(parsed, {
-    gatewayProtocol: "v3",
+    gatewayProtocol: "auto",
     url: "ws://127.0.0.1:19001",
     token: "fixture-value-1"
   });
@@ -75,7 +103,7 @@ test("parseCliArgs accepts --url=<url> and --token=<token>", () => {
 
 test("parseCliArgs rejects unsupported gateway protocols", () => {
   assert.throws(
-    () => parseCliArgs(["--gateway_protocol", "v5"]),
+    () => parseCliArgs(["--gateway-protocol", "v5"]),
     /Unsupported gateway protocol: v5/
   );
 });
@@ -114,4 +142,18 @@ test("parseCliArgs requires --url and --token to be used together", () => {
 
 test("parseCliArgs rejects unknown arguments", () => {
   assert.throws(() => parseCliArgs(["--unknown"]), /Unknown argument: --unknown/);
+});
+
+test("resolveGatewayProtocolAdapters probes v4 before v3 for auto selection", () => {
+  assert.deepEqual(
+    resolveGatewayProtocolAdapters("auto").map((adapter) => adapter.version),
+    ["v4", "v3"]
+  );
+});
+
+test("resolveGatewayProtocolAdapters keeps explicit protocol selections single-version", () => {
+  assert.deepEqual(
+    resolveGatewayProtocolAdapters("v3").map((adapter) => adapter.version),
+    ["v3"]
+  );
 });

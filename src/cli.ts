@@ -6,41 +6,39 @@ import {
 import {
   createGatewayProtocolAdapter,
   isGatewayProtocolVersion,
+  type GatewayProtocolAdapter,
   type GatewayProtocolVersion
 } from "./protocols/index.js";
 import { runOpenClawAcpBridge } from "./run.js";
 
+export type GatewayProtocolSelection = GatewayProtocolVersion | "auto";
+
 export interface CliArgs {
   configPath?: string;
-  gatewayProtocol: GatewayProtocolVersion;
+  gatewayProtocol: GatewayProtocolSelection;
   url?: string;
   token?: string;
 }
 
 export function parseCliArgs(argv: string[]): CliArgs {
   const parsed: CliArgs = {
-    gatewayProtocol: "v3"
+    gatewayProtocol: "auto"
   };
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
 
-    if (arg === "--config_path") {
-      const value = argv[index + 1];
-      if (value === undefined || value.startsWith("--")) {
-        throw new Error("Missing value for --config_path");
-      }
-      parsed.configPath = value;
+    if (arg === "--config_path" || arg === "--config-path") {
+      parsed.configPath = readOptionValue(argv, index, arg);
       index += 1;
       continue;
     }
 
-    if (arg.startsWith("--config_path=")) {
-      const value = arg.slice("--config_path=".length);
-      if (value === "") {
-        throw new Error("Missing value for --config_path");
-      }
-      parsed.configPath = value;
+    if (arg.startsWith("--config_path=") || arg.startsWith("--config-path=")) {
+      parsed.configPath = readInlineOptionValue(
+        arg,
+        arg.startsWith("--config_path=") ? "--config_path" : "--config-path"
+      );
       continue;
     }
 
@@ -66,22 +64,19 @@ export function parseCliArgs(argv: string[]): CliArgs {
       continue;
     }
 
-    if (arg === "--gateway_protocol") {
-      const value = argv[index + 1];
-      if (value === undefined || value.startsWith("--")) {
-        throw new Error("Missing value for --gateway_protocol");
-      }
-      parsed.gatewayProtocol = parseGatewayProtocol(value);
+    if (arg === "--gateway_protocol" || arg === "--gateway-protocol") {
+      parsed.gatewayProtocol = parseGatewayProtocol(readOptionValue(argv, index, arg));
       index += 1;
       continue;
     }
 
-    if (arg.startsWith("--gateway_protocol=")) {
-      const value = arg.slice("--gateway_protocol=".length);
-      if (value === "") {
-        throw new Error("Missing value for --gateway_protocol");
-      }
-      parsed.gatewayProtocol = parseGatewayProtocol(value);
+    if (arg.startsWith("--gateway_protocol=") || arg.startsWith("--gateway-protocol=")) {
+      parsed.gatewayProtocol = parseGatewayProtocol(
+        readInlineOptionValue(
+          arg,
+          arg.startsWith("--gateway_protocol=") ? "--gateway_protocol" : "--gateway-protocol"
+        )
+      );
       continue;
     }
 
@@ -104,11 +99,22 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
         configPath: args.configPath
       })
     : await loadOpenClawGatewayConfig(resolveOpenClawConfigPath(args.configPath));
-  const protocolAdapter = createGatewayProtocolAdapter(args.gatewayProtocol);
   return await runOpenClawAcpBridge({
     gatewayConfig,
-    protocolAdapter
+    protocolAdapters: resolveGatewayProtocolAdapters(args.gatewayProtocol)
   });
+}
+
+export function resolveGatewayProtocolAdapters(
+  selection: GatewayProtocolSelection
+): GatewayProtocolAdapter[] {
+  if (selection === "auto") {
+    return [
+      createGatewayProtocolAdapter("v4"),
+      createGatewayProtocolAdapter("v3")
+    ];
+  }
+  return [createGatewayProtocolAdapter(selection)];
 }
 
 export function formatCliError(error: unknown): string {
@@ -132,7 +138,10 @@ function readInlineOptionValue(arg: string, optionName: string): string {
   return value;
 }
 
-function parseGatewayProtocol(value: string): GatewayProtocolVersion {
+function parseGatewayProtocol(value: string): GatewayProtocolSelection {
+  if (value === "auto") {
+    return value;
+  }
   if (isGatewayProtocolVersion(value)) {
     return value;
   }

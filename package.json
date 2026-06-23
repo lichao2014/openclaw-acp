@@ -1,6 +1,6 @@
 {
   "name": "@lichao2014/openclaw-acp",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "ACP adapter for OpenClaw via Gateway",
   "license": "MIT",
   "type": "module",

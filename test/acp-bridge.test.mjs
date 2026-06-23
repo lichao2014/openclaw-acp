@@ -170,7 +170,7 @@ test("OpenClawAcpBridge initializes as openclaw-acp with session/list support", 
   assert.equal(response.id, 1);
   assert.equal(response.result.protocolVersion, 1);
   assert.equal(response.result.agentInfo.name, "openclaw-acp");
-  assert.equal(response.result.agentInfo.version, "0.1.1");
+  assert.equal(response.result.agentInfo.version, "0.1.2");
   assert.equal(response.result.agentCapabilities.loadSession, true);
   assert.deepEqual(response.result.agentCapabilities.sessionCapabilities.list, {});
   assert.deepEqual(response.result._meta.controls, [

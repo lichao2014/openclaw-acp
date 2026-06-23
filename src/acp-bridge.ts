@@ -227,7 +227,7 @@ export class OpenClawAcpBridge {
       agentInfo: {
         name: "openclaw-acp",
         title: "OpenClaw ACP Gateway",
-        version: "0.1.1"
+        version: "0.1.2"
       },
       authMethods: [],
       _meta: {
